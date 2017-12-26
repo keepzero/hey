@@ -67,6 +67,7 @@ Options:
   -n  Number of requests to run. Default is 200.
   -c  Number of requests to run concurrently. Total number of requests cannot
       be smaller than the concurrency level. Default is 50.
+	  If the -q (QPS) is set, -c will auto set to 1.
   -q  Rate limit, in seconds (QPS).
   -o  Output type. If none provided, a summary is printed.
       "csv" is the only supported alternative. Dumps the response
@@ -119,11 +120,9 @@ func main() {
 		usageAndExit("-n cannot be less than -c.")
 	}
 
-	if *q > 0 && *q < conc {
-		usageAndExit("-q cannot be less than -c.")
+	if *q > 0 {
+		conc = 1
 	}
-
-	qps := *q / conc
 
 	url := flag.Args()[0]
 	method := strings.ToUpper(*m)
@@ -203,7 +202,7 @@ func main() {
 		RequestBody:        bodyAll,
 		N:                  num,
 		C:                  conc,
-		QPS:                qps,
+		QPS:                *q,
 		Timeout:            *t,
 		DisableCompression: *disableCompression,
 		DisableKeepAlives:  *disableKeepAlives,
