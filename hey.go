@@ -118,16 +118,16 @@ func main() {
 	num := *n
 	conc := *c
 
+	if *q > 0 {
+		conc = 1
+	}
+
 	if num <= 0 || conc <= 0 {
 		usageAndExit("-n and -c cannot be smaller than 1.")
 	}
 
 	if num < conc {
 		usageAndExit("-n cannot be less than -c.")
-	}
-
-	if *q > 0 {
-		conc = 1
 	}
 
 	url := flag.Args()[0]
