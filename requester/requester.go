@@ -18,8 +18,10 @@ package requester
 import (
 	"bytes"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
@@ -36,6 +38,8 @@ const heyUA = "hey/0.0.1"
 const maxResult = 1000000
 const maxIdleConn = 500
 
+var random = rand.New(rand.NewSource(time.Now().UnixNano()))
+
 type result struct {
 	err           error
 	statusCode    int
@@ -48,11 +52,21 @@ type result struct {
 	contentLength int64
 }
 
+type RandomRange struct {
+	Start int
+	End   int
+	Size  int
+	Intn  int // for random start/end
+}
+
 type Work struct {
 	// Request is the request to be made.
 	Request *http.Request
 
 	RequestBody []byte
+
+	// Random range
+	RandomRange *RandomRange
 
 	// N is the total number of requests to make.
 	N int
@@ -147,7 +161,7 @@ func (b *Work) makeRequest(c *http.Client) {
 	var code int
 	var dnsStart, connStart, resStart, reqStart, delayStart time.Time
 	var dnsDuration, connDuration, resDuration, reqDuration, delayDuration time.Duration
-	req := cloneRequest(b.Request, b.RequestBody)
+	req := cloneRequest(b.Request, b.RequestBody, b.RandomRange)
 	trace := &httptrace.ClientTrace{
 		DNSStart: func(info httptrace.DNSStartInfo) {
 			dnsStart = time.Now()
@@ -262,7 +276,7 @@ func (b *Work) runWorkers() {
 
 // cloneRequest returns a clone of the provided *http.Request.
 // The clone is a shallow copy of the struct and its Header map.
-func cloneRequest(r *http.Request, body []byte) *http.Request {
+func cloneRequest(r *http.Request, body []byte, rr *RandomRange) *http.Request {
 	// shallow copy of the struct
 	r2 := new(http.Request)
 	*r2 = *r
@@ -270,6 +284,14 @@ func cloneRequest(r *http.Request, body []byte) *http.Request {
 	r2.Header = make(http.Header, len(r.Header))
 	for k, s := range r.Header {
 		r2.Header[k] = append([]string(nil), s...)
+	}
+	if r.Method == "GET" && rr != nil {
+		start, end := rr.Start, rr.End
+		if rr.Size > 0 {
+			start = rr.Start + random.Intn(rr.Intn)
+			end = start + rr.Size
+		}
+		r2.Header["Range"] = []string{fmt.Sprintf("bytes=%d-%d", start, end)}
 	}
 	if len(body) > 0 {
 		r2.Body = ioutil.NopCloser(bytes.NewReader(body))

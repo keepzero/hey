@@ -19,7 +19,7 @@ import (
 )
 
 func TestParseValidHeaderFlag(t *testing.T) {
-	match, err := parseInputWithRegexp("X-Something: !Y10K:;(He@poverflow?)", headerRegexp)
+	match, err := parseInputWithRegexp("X-Something: !Y10K:;(He@poverflow?)", headerRegexp, 1)
 	if err != nil {
 		t.Errorf("parseInputWithRegexp errored: %v", err)
 	}
@@ -32,14 +32,14 @@ func TestParseValidHeaderFlag(t *testing.T) {
 }
 
 func TestParseInvalidHeaderFlag(t *testing.T) {
-	_, err := parseInputWithRegexp("X|oh|bad-input: badbadbad", headerRegexp)
+	_, err := parseInputWithRegexp("X|oh|bad-input: badbadbad", headerRegexp, 1)
 	if err == nil {
 		t.Errorf("Header parsing errored; want no errors")
 	}
 }
 
 func TestParseValidAuthFlag(t *testing.T) {
-	match, err := parseInputWithRegexp("_coo-kie_:!!bigmonster@1969sid", authRegexp)
+	match, err := parseInputWithRegexp("_coo-kie_:!!bigmonster@1969sid", authRegexp, 1)
 	if err != nil {
 		t.Errorf("A valid auth flag was not parsed correctly: %v", err)
 	}
@@ -52,15 +52,29 @@ func TestParseValidAuthFlag(t *testing.T) {
 }
 
 func TestParseInvalidAuthFlag(t *testing.T) {
-	_, err := parseInputWithRegexp("X|oh|bad-input: badbadbad", authRegexp)
+	_, err := parseInputWithRegexp("X|oh|bad-input: badbadbad", authRegexp, 1)
 	if err == nil {
 		t.Errorf("Header parsing errored; want no errors")
 	}
 }
 
 func TestParseAuthMetaCharacters(t *testing.T) {
-	_, err := parseInputWithRegexp("plus+$*{:boom", authRegexp)
+	_, err := parseInputWithRegexp("plus+$*{:boom", authRegexp, 1)
 	if err != nil {
 		t.Errorf("Auth header with a plus sign in the user name errored: %v", err)
+	}
+}
+
+func TestParseValidRangeFlag(t *testing.T) {
+	_, err := parseInputWithRegexp("0-1000/100", rangeRegexp, 2)
+	if err != nil {
+		t.Errorf("Range parsing errored: %v", err)
+	}
+}
+
+func TestParseInvalidRangeFlag(t *testing.T) {
+	_, err := parseInputWithRegexp("100", rangeRegexp, 2)
+	if err == nil {
+		t.Errorf("Range parsing no error; want some errors")
 	}
 }

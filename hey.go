@@ -25,6 +25,7 @@ import (
 	"os/signal"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/rakyll/hey/requester"
@@ -33,6 +34,7 @@ import (
 const (
 	headerRegexp = `^([\w-]+):\s*(.+)`
 	authRegexp   = `^(.+):([^\s].+)`
+	rangeRegexp  = `^(0|[1-9][0-9]*)-([1-9][0-9]*)(/([1-9][0-9]*))?`
 )
 
 var (
@@ -44,6 +46,7 @@ var (
 	contentType = flag.String("T", "text/html", "")
 	authHeader  = flag.String("a", "", "")
 	hostHeader  = flag.String("host", "", "")
+	randomRange = flag.String("r", "", "")
 
 	output = flag.String("o", "", "")
 
@@ -76,6 +79,9 @@ Options:
   -m  HTTP method, one of GET, POST, PUT, DELETE, HEAD, OPTIONS.
   -H  Custom HTTP header. You can specify as many as needed by repeating the flag.
       For example, -H "Accept: text/html" -H "Content-Type: application/xml" .
+  -r  Shortcut range support, For example: "0-102400/1024" will request 1024 bytes
+      per request in range of 0 to 102400.
+      This will overwrite the range header which set by -H option.
   -t  Timeout for each request in seconds. Default is 20, use 0 for infinite.
   -A  HTTP Accept header.
   -d  HTTP request body.
@@ -136,7 +142,7 @@ func main() {
 	}
 	// set any other additional repeatable headers
 	for _, h := range hs {
-		match, err := parseInputWithRegexp(h, headerRegexp)
+		match, err := parseInputWithRegexp(h, headerRegexp, 1)
 		if err != nil {
 			usageAndExit(err.Error())
 		}
@@ -150,7 +156,7 @@ func main() {
 	// set basic auth if set
 	var username, password string
 	if *authHeader != "" {
-		match, err := parseInputWithRegexp(*authHeader, authRegexp)
+		match, err := parseInputWithRegexp(*authHeader, authRegexp, 1)
 		if err != nil {
 			usageAndExit(err.Error())
 		}
@@ -212,6 +218,28 @@ func main() {
 		Output:             *output,
 	}
 
+	if *randomRange != "" {
+		match, err := parseInputWithRegexp(*randomRange, rangeRegexp, 2)
+		if err != nil {
+			usageAndExit(err.Error())
+		}
+		start, _ := strconv.Atoi(match[1])
+		end, _ := strconv.Atoi(match[2])
+		size := 0
+		if match[4] != "" {
+			size, _ = strconv.Atoi(match[4])
+		}
+		if start < 0 || end <= start || end-start < size {
+			usageAndExit(fmt.Sprintf("Invalid -r %s\n", *randomRange))
+		}
+		w.RandomRange = &requester.RandomRange{
+			Start: start,
+			End:   end,
+			Size:  size,
+			Intn:  end - size - start + 1,
+		}
+	}
+
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
@@ -238,10 +266,10 @@ func usageAndExit(msg string) {
 	os.Exit(1)
 }
 
-func parseInputWithRegexp(input, regx string) ([]string, error) {
+func parseInputWithRegexp(input, regx string, ms int) ([]string, error) {
 	re := regexp.MustCompile(regx)
 	matches := re.FindStringSubmatch(input)
-	if len(matches) < 1 {
+	if len(matches) < ms {
 		return nil, fmt.Errorf("could not parse the provided input; input = %v", input)
 	}
 	return matches, nil
